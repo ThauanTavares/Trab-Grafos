@@ -1,0 +1,10 @@
+// Nome do grafo
+MeuGrafo
+
+// Arestas com peso
+A -- B 10
+B -- C 5
+C -- A 3
+
+// Vértice isolado
+D
