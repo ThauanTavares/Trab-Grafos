@@ -8,7 +8,7 @@
 //------------------------------------------------------------------------------
 // estrutura de dados para representar um grafo
 
-
+#define MAX_COMPONENTES 1024
 #define MAX_LINHA 2048
 
 typedef struct vertice {
@@ -77,8 +77,9 @@ três
 
 void calcula_componentes(grafo *g);
 void dfs(vertice *v);
-static int indice_vertice(vertice **v_arr, unsigned int n, vertice *v);
-static int dfs_bipartido(vertice *v, vertice **v_arr, int *cores, unsigned int n, int cor_atual);
+int indice_vertice(vertice **v_arr, unsigned int n, vertice *v);
+int dfs_bipartido(vertice *v, vertice **v_arr, int *cores, unsigned int n, int cor_atual);
+int bfs_distancia_maxima(vertice *inicio, grafo *g);
 
 
 
