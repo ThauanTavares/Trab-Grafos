@@ -2,15 +2,13 @@
 
 Autores:  
 Arthur Dias Viana de Castro - GRR20190371  
-[Nome e GRR da dupla]
+Thauan de Souza Tavares da Silva - GRR20171591
 
 ---
 
 ## Informações
 
-Todas as funções obrigatórias foram implementadas.
-
-As funções `vertices_corte`, `arestas_corte` e `diametros` foram implementadas conforme solicitado, com o uso de funções auxiliares para organização e modularidade.
+Todas as funções obrigatórias foram implementadas conforme solicitado, com o uso de funções auxiliares para organização e modularidade.
 
 Entre as auxiliares implementadas estão:
 
