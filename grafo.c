@@ -344,3 +344,322 @@ char *diametros (grafo *g) {
 
 	return res;
 }
+
+// Ordena os nomes alfabeticamente
+int cmpstr (const void *a, const void *b) {
+	const char *const *pa = (const char *const *)a;
+	const char *const *pb = (const char *const *)b;
+	return strcmp (*pa, *pb);
+}
+
+bool montar_vetor_vertices (grafo *g, vertice **v_arr) {
+	if ( !v_arr ) return false;
+
+	unsigned int idx = 0;
+	for ( vertice *v = g->vertices; v != NULL; v = v->prox ) {
+		v->visitado = 0;   // zera visitado
+		v_arr[idx++] = v;  // insere no vetor
+	}
+
+	return true;
+}
+
+bool inicializar_vetores (int **desc, int **low, int **pai, bool **articulacao, unsigned int n) {
+	*desc = malloc (sizeof (int) * n);
+	*low = malloc (sizeof (int) * n);
+	*pai = malloc (sizeof (int) * n);
+	*articulacao = malloc (sizeof (bool) * n);
+
+	if ( !*desc || !*low || !*pai || !*articulacao ) {
+		free (*desc);
+		free (*low);
+		free (*pai);
+		free (*articulacao);
+		return false;
+	}
+
+	for ( unsigned int i = 0; i < n; i++ ) {
+		(*desc)[i] = -1;
+		(*low)[i] = -1;
+		(*pai)[i] = -1;
+		(*articulacao)[i] = false;
+	}
+
+	return true;
+}
+
+char *montar_string_vertices_corte (vertice **v_arr, bool *articulacao, unsigned int n) {
+	// Conta quantos vertices sao de corte
+	unsigned int total = 0;
+	for ( unsigned int i = 0; i < n; i++ ) {
+		if ( articulacao[i] ) total++;
+	}
+
+	if ( total == 0 ) {
+		return strdup ("");	 // Nao ha vertices de corte
+	}
+
+	// Coleta nomes dos vertices de corte
+	char **nomes = malloc (sizeof (char *) * total);
+	if ( !nomes ) return NULL;
+
+	unsigned int j = 0;
+	for ( unsigned int i = 0; i < n; i++ ) {
+		if ( articulacao[i] ) {
+			nomes[j++] = v_arr[i]->nome;
+		}
+	}
+
+	qsort (nomes, total, sizeof (char *), cmpstr);
+
+	// Calcula tamanho total da string
+	size_t total_len = 0;
+	for ( unsigned int i = 0; i < total; i++ ) {
+		total_len += strlen (nomes[i]) + 1;	 // +1 para espaco ou '\0'
+	}
+
+	// Monta string final
+	char *resultado = malloc (total_len);
+	if ( !resultado ) {
+		free (nomes);
+		return NULL;
+	}
+
+	resultado[0] = '\0';
+	for ( unsigned int i = 0; i < total; i++ ) {
+		strcat (resultado, nomes[i]);
+		if ( i < total - 1 ) strcat (resultado, " ");
+	}
+
+	free (nomes);
+	return resultado;
+}
+
+void destruir_vetor_vertices (vertice **v_arr) {
+	free (v_arr);
+}
+
+void destruir_vetores_auxiliares (int *desc, int *low, int *pai, bool *articulacao) {
+	free (desc);
+	free (low);
+	free (pai);
+	free (articulacao);
+}
+
+void dfs_articulacoes (vertice *v, vertice **v_arr, int *desc, int *low, int *pai, bool *articulacao, unsigned int n, int *tempo) {
+	int idx_v = indice_vertice (v_arr, n, v);
+	v->visitado = 1;
+
+	desc[idx_v] = low[idx_v] = (*tempo)++;
+	int filhos = 0;
+
+	// Percorre todos os vizinhos do vertice v
+	for ( vizinho *viz = v->vizinhos; viz != NULL; viz = viz->prox ) {
+		vertice *u = viz->destino;
+		int idx_u = indice_vertice (v_arr, n, u);
+
+		if ( !u->visitado ) {
+			pai[idx_u] = idx_v;
+			filhos++;
+
+			dfs_articulacoes (u, v_arr, desc, low, pai, articulacao, n, tempo);
+
+			// Atualiza low de v com o menor low dos filhos
+			if ( low[idx_u] < low[idx_v] ) {
+				low[idx_v] = low[idx_u];
+			}
+
+			// Se v nao é raiz e low[u] >= desc[v], v é articulacao
+			if ( pai[idx_v] != -1 && low[idx_u] >= desc[idx_v] ) {
+				articulacao[idx_v] = true;
+			}
+
+		} else if ( idx_u != pai[idx_v] ) {
+			// Se u já foi visitado e nao é o pai de v, temos uma aresta de retorno
+			if ( desc[idx_u] < low[idx_v] ) {
+				low[idx_v] = desc[idx_u];
+			}
+		}
+	}
+
+	// Caso especial: se v é raiz e tem mais de um filho, é articulacao
+	if ( pai[idx_v] == -1 && filhos > 1 ) {
+		articulacao[idx_v] = true;
+	}
+}
+
+char *vertices_corte (grafo *g) {
+	vertice **v_arr = malloc (sizeof (vertice *) * g->n_vertices);
+
+	if ( !montar_vetor_vertices (g, v_arr) ) return NULL;
+
+	int *desc, *low, *pai;
+	bool *articulacao;
+
+	if ( !inicializar_vetores (&desc, &low, &pai, &articulacao, g->n_vertices) ) {
+		destruir_vetor_vertices (v_arr);
+		return NULL;
+	}
+
+	int tempo = 0;
+	for ( unsigned int i = 0; i < g->n_vertices; i++ ) {
+		if ( !v_arr[i]->visitado ) {
+			dfs_articulacoes (v_arr[i], v_arr, desc, low, pai, articulacao, g->n_vertices, &tempo);
+		}
+	}
+
+	char *resultado = montar_string_vertices_corte (v_arr, articulacao, g->n_vertices);
+
+	destruir_vetor_vertices (v_arr);
+	destruir_vetores_auxiliares (desc, low, pai, articulacao);
+
+	return resultado;
+}
+
+bool inicializar_arestas (char ***arestas, unsigned int capacidade) {
+	if ( capacidade == 0 ) {
+		capacidade = 1;
+	}
+
+	*arestas = malloc (sizeof (char *) * capacidade);
+	if ( !*arestas ) return false;
+
+	// Inicializa os ponteiros com NULL (opcional, mas seguro para liberar depois)
+	for ( unsigned int i = 0; i < capacidade; i++ ) {
+		(*arestas)[i] = NULL;
+	}
+
+	return true;
+}
+
+void destruir_arestas (char **arestas, unsigned int total) {
+	if ( !arestas ) return;
+
+	for ( unsigned int i = 0; i < total; i++ ) {
+		free (arestas[i]);
+	}
+
+	free (arestas);
+}
+
+bool adicionar_aresta_corte (const char *nome1, const char *nome2, char ***arestas, unsigned int *total, unsigned int *capacidade) {
+	// Ordena os nomes alfabeticamente
+	const char *a = (strcmp (nome1, nome2) < 0) ? nome1 : nome2;
+	const char *b = (a == nome1) ? nome2 : nome1;
+
+	size_t len = strlen (a) + strlen (b) + 2;
+	char *aresta = malloc (len);
+	if ( !aresta ) return false;
+
+	snprintf (aresta, len, "%s %s", a, b);
+
+	// Expande o vetor, se necessario
+	if ( *total >= *capacidade ) {
+		*capacidade *= 2;
+		char **novo = realloc (*arestas, sizeof (char *) * (*capacidade));
+		if ( !novo ) {
+			free (aresta);
+			return false;
+		}
+		*arestas = novo;
+	}
+
+	(*arestas)[*total] = aresta;
+	(*total)++;
+	return true;
+}
+
+char *montar_string_arestas_corte (char **arestas, unsigned int total) {
+	if ( total == 0 ) return strdup ("");
+
+	qsort (arestas, total, sizeof (char *), cmpstr);
+
+	// Calcula o tamanho total da string final
+	size_t total_len = 0;
+	for ( unsigned int i = 0; i < total; i++ ) {
+		total_len += strlen (arestas[i]) + 1;  // +1 para espaco ou \0
+	}
+
+	// Aloca e monta a string final
+	char *resultado = malloc (total_len);
+	if ( !resultado ) return NULL;
+
+	resultado[0] = '\0';
+	for ( unsigned int i = 0; i < total; i++ ) {
+		strcat (resultado, arestas[i]);
+		if ( i < total - 1 ) strcat (resultado, " ");
+	}
+
+	return resultado;
+}
+
+void dfs_arestas_corte (vertice *v, vertice **v_arr, int *desc, int *low, int *pai, unsigned int n, int *tempo, char **arestas, unsigned int *total, unsigned int *capacidade) {
+	int idx_v = indice_vertice (v_arr, n, v);
+	v->visitado = 1;
+	desc[idx_v] = low[idx_v] = (*tempo)++;
+
+	for ( vizinho *viz = v->vizinhos; viz != NULL; viz = viz->prox ) {
+		vertice *u = viz->destino;
+		int idx_u = indice_vertice (v_arr, n, u);
+
+		if ( !u->visitado ) {
+			pai[idx_u] = idx_v;
+			dfs_arestas_corte (u, v_arr, desc, low, pai, n, tempo, arestas, total, capacidade);
+
+			if ( low[idx_u] < low[idx_v] ) {
+				low[idx_v] = low[idx_u];
+			}
+
+			if ( low[idx_u] > desc[idx_v] ) {
+				adicionar_aresta_corte (v->nome, u->nome, &arestas, total, capacidade);
+			}
+
+		} else if ( idx_u != pai[idx_v] ) {
+			if ( desc[idx_u] < low[idx_v] ) {
+				low[idx_v] = desc[idx_u];
+			}
+		}
+	}
+}
+
+char *arestas_corte (grafo *g) {
+	vertice **v_arr = malloc (sizeof (vertice *) * g->n_vertices);
+	if ( !v_arr ) return NULL;
+
+	if ( !montar_vetor_vertices (g, v_arr) ) {
+		destruir_vetor_vertices (v_arr);
+		return NULL;
+	}
+
+	int *desc, *low, *pai;
+	bool *articulacao;
+	if ( !inicializar_vetores (&desc, &low, &pai, &articulacao, g->n_vertices) ) {
+		destruir_vetor_vertices (v_arr);
+		return NULL;
+	}
+
+	// Inicializa vetor de arestas de corte
+	unsigned int total = 0;
+	unsigned int capacidade = g->n_arestas > 0 ? g->n_arestas : 1;
+	char **arestas = NULL;
+	if ( !inicializar_arestas (&arestas, capacidade) ) {
+		destruir_vetor_vertices (v_arr);
+		destruir_vetores_auxiliares (desc, low, pai, NULL);
+		return NULL;
+	}
+
+	int tempo = 0;
+	for ( unsigned int i = 0; i < g->n_vertices; i++ ) {
+		if ( !v_arr[i]->visitado ) {
+			dfs_arestas_corte (v_arr[i], v_arr, desc, low, pai, g->n_vertices, &tempo, arestas, &total, &capacidade);
+		}
+	}
+
+	char *resultado = montar_string_arestas_corte (arestas, total);
+
+	destruir_arestas (arestas, total);
+	destruir_vetor_vertices (v_arr);
+	destruir_vetores_auxiliares (desc, low, pai, articulacao);
+
+	return resultado;
+}

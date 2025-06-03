@@ -1,10 +1,6 @@
-// Nome do grafo
-MeuGrafo
+// nome
+dois_componentes
 
-// Arestas com peso
-A -- B 10
-B -- C 5
-C -- A 3
+a -- b
+c -- d
 
-// Vértice isolado
-D
