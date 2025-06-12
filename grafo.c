@@ -218,131 +218,171 @@ unsigned int n_componentes (grafo *g) {
 	return g->n_componentes;
 }
 
-// BFS para calcular distância máxima a partir de um vértice
-int bfs_distancia_maxima (vertice *inicio, grafo *g) {
-	// Mapeia índices temporários para vértices
-	vertice **vertices_array = malloc (sizeof (vertice *) * g->n_vertices);
-	int index = 0;
-	for ( vertice *v = g->vertices; v != NULL; v = v->prox ) {
-		vertices_array[index++] = v;
-		v->visitado = 0;
-	}
+// BFS para calcular a excentricidade de um vértice dentro de um componente
+// grafo.c
 
-	int *dist = malloc (sizeof (int) * g->n_vertices);
-	for ( unsigned int i = 0; i < g->n_vertices; i++ ) dist[i] = -1;
+// BFS para calcular a excentricidade de um vértice dentro de um componente
+int bfs_distancia_maxima(vertice *inicio, vertice **componente, int n_comp) {
+    if (n_comp <= 1) return 0;
 
-	vertice **fila = malloc (sizeof (vertice *) * g->n_vertices);
-	int ini = 0, fim = 0;
+    // Vetor de distâncias para os vértices do componente
+    // CORREÇÃO: Cast de n_comp para size_t para evitar o warning.
+    int *dist = malloc(sizeof(int) * (size_t)n_comp);
+    if (!dist) return -1; // Adicionado verificação de alocação
 
-	inicio->visitado = 1;
-	dist[0] = 0;  // distância do início até ele mesmo
-	fila[fim++] = inicio;
+    for (int i = 0; i < n_comp; i++) {
+        dist[i] = -1;         // -1 significa não alcançado
+        componente[i]->visitado = 0; // Marca todos como não visitados para esta BFS
+    }
 
-	int max_dist = 0;
+    // Fila para a BFS
+    // CORREÇÃO: Cast de n_comp para size_t para evitar o warning.
+    vertice **fila = malloc(sizeof(vertice *) * (size_t)n_comp);
+    if (!fila) { // Adicionado verificação de alocação
+        free(dist);
+        return -1;
+    }
 
-	while ( ini < fim ) {
-		vertice *atual = fila[ini++];
-		int atual_idx = -1;
-		for ( unsigned i = 0; i < g->n_vertices; i++ ) {
-			if ( vertices_array[i] == atual ) {
-				atual_idx = (int)i;
-				break;
-			}
-		}
+    int ini = 0, fim = 0;
+    int max_dist = 0;
 
-		for ( vizinho *viz = atual->vizinhos; viz; viz = viz->prox ) {
-			if ( !viz->destino->visitado ) {
-				viz->destino->visitado = 1;
-				for ( unsigned i = 0; i < g->n_vertices; i++ ) {
-					if ( vertices_array[i] == viz->destino ) {
-						dist[i] = dist[atual_idx] + 1;
-						if ( dist[i] > max_dist ) max_dist = dist[i];
-						fila[fim++] = viz->destino;
-						break;
-					}
-				}
-			}
-		}
-	}
+    // Encontra o índice do vértice inicial no array do componente
+    int idx_inicio = -1;
+    for (int i = 0; i < n_comp; i++) {
+        if (componente[i] == inicio) {
+            idx_inicio = i;
+            break;
+        }
+    }
+    
+    // Se por algum motivo o vértice de início não estiver no componente, há um erro.
+    if (idx_inicio == -1) {
+        free(dist);
+        free(fila);
+        return -1; // Código de erro
+    }
 
-	free (vertices_array);
-	free (dist);
-	free (fila);
-	return max_dist;
+    // Inicializa a BFS
+    dist[idx_inicio] = 0;
+    inicio->visitado = 1;
+    fila[fim++] = inicio;
+
+    while (ini < fim) {
+        vertice *atual = fila[ini++];
+
+        // Encontra o índice do vértice atual para acessar seu 'dist'
+        int idx_atual = -1;
+        for (int i = 0; i < n_comp; i++) {
+            if (componente[i] == atual) {
+                idx_atual = i;
+                break;
+            }
+        }
+
+        // Itera sobre os vizinhos
+        for (vizinho *viz = atual->vizinhos; viz; viz = viz->prox) {
+            if (!viz->destino->visitado) {
+                 // Encontra o índice do vizinho no componente
+                int idx_vizinho = -1;
+                for (int i = 0; i < n_comp; i++) {
+                    if (componente[i] == viz->destino) {
+                        idx_vizinho = i;
+                        break;
+                    }
+                }
+                
+                // Se o vizinho pertence a este componente
+                if (idx_vizinho != -1) {
+                    viz->destino->visitado = 1;
+                    dist[idx_vizinho] = dist[idx_atual] + 1;
+                    if (dist[idx_vizinho] > max_dist) {
+                        max_dist = dist[idx_vizinho];
+                    }
+                    fila[fim++] = viz->destino;
+                }
+            }
+        }
+    }
+
+    free(dist);
+    free(fila);
+    return max_dist;
 }
 
-char *diametros (grafo *g) {
-	// Marca todos como não visitados
-	for ( vertice *v = g->vertices; v != NULL; v = v->prox )
-		v->visitado = 0;
 
-	int diams[MAX_COMPONENTES];
-	int n_diams = 0;
+char *diametros(grafo *g) {
+    // Marca todos como não visitados para a descoberta de componentes
+    for (vertice *v = g->vertices; v != NULL; v = v->prox)
+        v->visitado = 0;
 
-	for ( vertice *v = g->vertices; v != NULL; v = v->prox ) {
-		if ( !v->visitado ) {
-			// Descobrir todos do componente
-			vertice **componente = malloc (sizeof (vertice *) * g->n_vertices);
-			int n_comp = 0;
+    int diams[MAX_COMPONENTES];
+    int n_diams = 0;
 
-			// BFS para identificar o componente
-			vertice **fila = malloc (sizeof (vertice *) * g->n_vertices);
-			int ini = 0, fim = 0;
+    for (vertice *v = g->vertices; v != NULL; v = v->prox) {
+        if (!v->visitado) {
+            // 1. Descobrir todos os vértices do componente atual
+            vertice **componente = malloc(sizeof(vertice *) * g->n_vertices);
+            int n_comp = 0;
+            vertice **fila = malloc(sizeof(vertice *) * g->n_vertices);
+            int ini = 0, fim = 0;
 
-			v->visitado = 1;
-			fila[fim++] = v;
+            v->visitado = 1;
+            fila[fim++] = v;
+            componente[n_comp++] = v;
 
-			while ( ini < fim ) {
-				vertice *u = fila[ini++];
-				componente[n_comp++] = u;
+            while (ini < fim) {
+                vertice *u = fila[ini++];
+                for (vizinho *viz = u->vizinhos; viz; viz = viz->prox) {
+                    if (!viz->destino->visitado) {
+                        viz->destino->visitado = 1;
+                        fila[fim++] = viz->destino;
+                        componente[n_comp++] = viz->destino;
+                    }
+                }
+            }
+            free(fila);
 
-				for ( vizinho *viz = u->vizinhos; viz; viz = viz->prox ) {
-					if ( !viz->destino->visitado ) {
-						viz->destino->visitado = 1;
-						fila[fim++] = viz->destino;
-					}
-				}
-			}
+            // 2. Calcular o diâmetro do componente encontrado
+            int diam_componente = 0;
+            if (n_comp > 1) {
+                 // Para cada vértice do componente, calcula sua excentricidade
+                for (int i = 0; i < n_comp; i++) {
+                    // A função bfs_distancia_maxima agora cuida de zerar o 'visitado' internamente
+                    int excentricidade = bfs_distancia_maxima(componente[i], componente, n_comp);
+                    if (excentricidade > diam_componente) {
+                        diam_componente = excentricidade;
+                    }
+                }
+            }
+            
+            diams[n_diams++] = diam_componente;
+            free(componente);
+        }
+    }
 
-			// Para cada vértice do componente, calcula a distância máxima
-			int diam = 0;
-			for ( int i = 0; i < n_comp; i++ ) {
-				for ( vertice *tmp = g->vertices; tmp; tmp = tmp->prox )
-					tmp->visitado = 0;
+    // 3. Ordena os diâmetros em ordem crescente (bubble sort simples)
+    for (int i = 0; i < n_diams; i++) {
+        for (int j = i + 1; j < n_diams; j++) {
+            if (diams[i] > diams[j]) {
+                int tmp = diams[i];
+                diams[i] = diams[j];
+                diams[j] = tmp;
+            }
+        }
+    }
 
-				int dist = bfs_distancia_maxima (componente[i], g);
-				if ( dist > diam ) diam = dist;
-			}
+    // 4. Monta a string de saída
+    char *res = malloc(16 * (size_t)n_diams + 1); // +1 para o \0
+    if (!res) return NULL;
+    res[0] = '\0';
+    char buffer[16];
+    for (int i = 0; i < n_diams; i++) {
+        sprintf(buffer, "%d", diams[i]);
+        strcat(res, buffer);
+        if (i < n_diams - 1) strcat(res, " ");
+    }
 
-			diams[n_diams++] = diam;
-
-			free (fila);
-			free (componente);
-		}
-	}
-
-	// Ordena os diâmetros em ordem crescente (bubble sort simples)
-	for ( int i = 0; i < n_diams; i++ ) {
-		for ( int j = i + 1; j < n_diams; j++ ) {
-			if ( diams[i] > diams[j] ) {
-				int tmp = diams[i];
-				diams[i] = diams[j];
-				diams[j] = tmp;
-			}
-		}
-	}
-
-	// Monta a string de saída
-	char *res = malloc (16 * (size_t)n_diams);	// tamanho suficiente
-	res[0] = '\0';
-	char buffer[16];
-	for ( int i = 0; i < n_diams; i++ ) {
-		sprintf (buffer, "%d", diams[i]);
-		strcat (res, buffer);
-		if ( i < n_diams - 1 ) strcat (res, " ");
-	}
-
-	return res;
+    return res;
 }
 
 // Ordena os nomes alfabeticamente

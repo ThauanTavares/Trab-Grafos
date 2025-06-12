@@ -182,7 +182,7 @@ int dfs_bipartido (vertice *v, vertice **v_arr, int *cores, unsigned int n, int 
  *
  * @return Valor inteiro correspondente a maior distancia encontrada a partir do vertice inicial.
  */
-int bfs_distancia_maxima (vertice *inicio, grafo *g);
+int bfs_distancia_maxima(vertice *inicio, vertice **componente, int n_comp) ;
 
 /**
  * Adiciona um novo vizinho (aresta) ao vertice de origem.

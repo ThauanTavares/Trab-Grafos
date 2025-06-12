@@ -1,6 +1,11 @@
-// nome
-dois_componentes
+// teste1
+
+tres_componentes
+
+
 
 a -- b
+
 c -- d
 
+e -- f
