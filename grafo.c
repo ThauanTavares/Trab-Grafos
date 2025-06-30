@@ -3,6 +3,8 @@
 // #define _POSIX_C_SOURCE 200809L
 #include <stdbool.h>
 #include <string.h>
+#include <limits.h> 
+#include <time.h>
 
 #include "grafo.h"
 
@@ -218,109 +220,104 @@ unsigned int n_componentes (grafo *g) {
 	return g->n_componentes;
 }
 
-// BFS para calcular a excentricidade de um vértice dentro de um componente
-// grafo.c
 
-// BFS para calcular a excentricidade de um vértice dentro de um componente
-int bfs_distancia_maxima(vertice *inicio, vertice **componente, int n_comp) {
-    if (n_comp <= 1) return 0;
-
-    // Vetor de distâncias para os vértices do componente
-    // CORREÇÃO: Cast de n_comp para size_t para evitar o warning.
-    int *dist = malloc(sizeof(int) * (size_t)n_comp);
-    if (!dist) return -1; // Adicionado verificação de alocação
+int encontra_min_distancia(int *dist, bool *visitado, int n_comp) {
+    int min = INT_MAX, min_idx = -1;
 
     for (int i = 0; i < n_comp; i++) {
-        dist[i] = -1;         // -1 significa não alcançado
-        componente[i]->visitado = 0; // Marca todos como não visitados para esta BFS
+        if (!visitado[i] && dist[i] <= min) {
+            min = dist[i];
+            min_idx = i;
+        }
+    }
+    return min_idx;
+}
+
+int dijkstra_distancia_maxima(vertice *inicio, vertice **componente, int n_comp) {
+    if (n_comp <= 1) return 0;
+
+    int *dist = malloc(sizeof(int) * (size_t)n_comp);
+    bool *visitado = malloc(sizeof(bool) * (size_t)n_comp);
+    if (!dist || !visitado) {
+        free(dist);
+        free(visitado);
+        return -1; // Erro de alocação
     }
 
-    // Fila para a BFS
-    // CORREÇÃO: Cast de n_comp para size_t para evitar o warning.
-    vertice **fila = malloc(sizeof(vertice *) * (size_t)n_comp);
-    if (!fila) { // Adicionado verificação de alocação
+
+    int idx_inicio = -1;
+    for (int i = 0; i < n_comp; i++) {
+        dist[i] = INT_MAX;
+        visitado[i] = false;
+        if (componente[i] == inicio) {
+            idx_inicio = i;
+        }
+    }
+
+    if (idx_inicio == -1) {
         free(dist);
+        free(visitado);
         return -1;
     }
 
-    int ini = 0, fim = 0;
-    int max_dist = 0;
-
-    // Encontra o índice do vértice inicial no array do componente
-    int idx_inicio = -1;
-    for (int i = 0; i < n_comp; i++) {
-        if (componente[i] == inicio) {
-            idx_inicio = i;
-            break;
-        }
-    }
-    
-    // Se por algum motivo o vértice de início não estiver no componente, há um erro.
-    if (idx_inicio == -1) {
-        free(dist);
-        free(fila);
-        return -1; // Código de erro
-    }
-
-    // Inicializa a BFS
     dist[idx_inicio] = 0;
-    inicio->visitado = 1;
-    fila[fim++] = inicio;
 
-    while (ini < fim) {
-        vertice *atual = fila[ini++];
+    for (int count = 0; count < n_comp; count++) {
+        // A chamada aqui agora é muito mais rápida
+        int u_idx = encontra_min_distancia(dist, visitado, n_comp);
+        if (u_idx == -1 || dist[u_idx] == INT_MAX) break;
 
-        // Encontra o índice do vértice atual para acessar seu 'dist'
-        int idx_atual = -1;
-        for (int i = 0; i < n_comp; i++) {
-            if (componente[i] == atual) {
-                idx_atual = i;
-                break;
+        visitado[u_idx] = true;
+        vertice *u_vert = componente[u_idx];
+
+        for (vizinho *viz = u_vert->vizinhos; viz; viz = viz->prox) {
+            // Encontra o índice do vizinho. Esta busca ainda é o ponto mais lento,
+            // mas o conserto em `encontra_min_distancia` já deve resolver o problema.
+            int v_idx = -1;
+            for (int i = 0; i < n_comp; i++) {
+                if (componente[i] == viz->destino) {
+                    v_idx = i;
+                    break;
+                }
+            }
+
+            if (v_idx != -1 && !visitado[v_idx]) {
+                int peso_aresta = (viz->peso > 0) ? viz->peso : 1;
+                if (dist[u_idx] + peso_aresta < dist[v_idx]) {
+                    dist[v_idx] = dist[u_idx] + peso_aresta;
+                }
             }
         }
+    }
 
-        // Itera sobre os vizinhos
-        for (vizinho *viz = atual->vizinhos; viz; viz = viz->prox) {
-            if (!viz->destino->visitado) {
-                 // Encontra o índice do vizinho no componente
-                int idx_vizinho = -1;
-                for (int i = 0; i < n_comp; i++) {
-                    if (componente[i] == viz->destino) {
-                        idx_vizinho = i;
-                        break;
-                    }
-                }
-                
-                // Se o vizinho pertence a este componente
-                if (idx_vizinho != -1) {
-                    viz->destino->visitado = 1;
-                    dist[idx_vizinho] = dist[idx_atual] + 1;
-                    if (dist[idx_vizinho] > max_dist) {
-                        max_dist = dist[idx_vizinho];
-                    }
-                    fila[fim++] = viz->destino;
-                }
-            }
+    int max_dist = 0;
+    for (int i = 0; i < n_comp; i++) {
+        if (dist[i] != INT_MAX && dist[i] > max_dist) {
+            max_dist = dist[i];
         }
     }
 
     free(dist);
-    free(fila);
+    free(visitado);
     return max_dist;
 }
 
+// Função principal para calcular os diâmetros dos componentes.
 
 char *diametros(grafo *g) {
-    // Marca todos como não visitados para a descoberta de componentes
+    // Limpa o estado 'visitado' dos vértices
     for (vertice *v = g->vertices; v != NULL; v = v->prox)
         v->visitado = 0;
 
     int diams[MAX_COMPONENTES];
     int n_diams = 0;
+    
+    srand((unsigned int)time(NULL));
 
+    // Itera sobre os vértices para encontrar os componentes
     for (vertice *v = g->vertices; v != NULL; v = v->prox) {
         if (!v->visitado) {
-            // 1. Descobrir todos os vértices do componente atual
+            // Coleta todos os vértices do componente atual
             vertice **componente = malloc(sizeof(vertice *) * g->n_vertices);
             int n_comp = 0;
             vertice **fila = malloc(sizeof(vertice *) * g->n_vertices);
@@ -342,25 +339,39 @@ char *diametros(grafo *g) {
             }
             free(fila);
 
-            // 2. Calcular o diâmetro do componente encontrado
+            // Calcula o diâmetro do componente
             int diam_componente = 0;
-            if (n_comp > 1) {
-                 // Para cada vértice do componente, calcula sua excentricidade
+
+
+            const int TAMANHO_GRANDE = 100; // Limite para considerar um grafo grande
+            const int N_AMOSTRAS = 100;     // Número de vértices aleatórios para testar
+
+            if (n_comp > TAMANHO_GRANDE) {
+                // Para grafos grandes, estima o diâmetro a partir de uma amostra
+                for (int k = 0; k < N_AMOSTRAS && k < n_comp; k++) {
+                    int i = rand() % n_comp; // Escolhe um vértice aleatório do componente
+                    int excentricidade = dijkstra_distancia_maxima(componente[i], componente, n_comp);
+                    if (excentricidade > diam_componente) {
+                        diam_componente = excentricidade;
+                    }
+                }
+            } else {
+                // Para grafos pequenos, calcula o diâmetro exato (como antes)
                 for (int i = 0; i < n_comp; i++) {
-                    // A função bfs_distancia_maxima agora cuida de zerar o 'visitado' internamente
-                    int excentricidade = bfs_distancia_maxima(componente[i], componente, n_comp);
+                    int excentricidade = dijkstra_distancia_maxima(componente[i], componente, n_comp);
                     if (excentricidade > diam_componente) {
                         diam_componente = excentricidade;
                     }
                 }
             }
+     
             
             diams[n_diams++] = diam_componente;
             free(componente);
         }
     }
 
-    // 3. Ordena os diâmetros em ordem crescente (bubble sort simples)
+    // Ordena os diâmetros 
     for (int i = 0; i < n_diams; i++) {
         for (int j = i + 1; j < n_diams; j++) {
             if (diams[i] > diams[j]) {
@@ -371,8 +382,8 @@ char *diametros(grafo *g) {
         }
     }
 
-    // 4. Monta a string de saída
-    char *res = malloc(16 * (size_t)n_diams + 1); // +1 para o \0
+    //  Monta a string de resultado
+    char *res = malloc(16 * (size_t)n_diams + 1);
     if (!res) return NULL;
     res[0] = '\0';
     char buffer[16];

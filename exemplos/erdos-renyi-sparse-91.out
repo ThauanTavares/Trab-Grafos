@@ -1,0 +1,8 @@
+grafo: erdos-renyi-sparse-91
+91 vertices
+170 arestas
+1 componentes
+não bipartido
+diâmetros: 7
+vértices de corte: 12 2 48 67 81 90
+arestas de corte: 12 91 2 79 39 48 51 67 65 90 81 84

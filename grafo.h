@@ -343,5 +343,7 @@ char *montar_string_arestas_corte (char **arestas, unsigned int total);
  * @param capacidade Ponteiro para a capacidade atual do vetor de arestas.
  */
 void dfs_arestas_corte (vertice *v, vertice **v_arr, int *desc, int *low, int *pai, unsigned int n, int *tempo, char **arestas, unsigned int *total, unsigned int *capacidade);
+int dijkstra_distancia_maxima(vertice *inicio, vertice **componente, int n_comp);
+int encontra_min_distancia(int *dist, bool *visitado, int n_comp);
 
 #endif
